@@ -1,0 +1,150 @@
+TryHackMe - Pickle Rick 🥒
+🎯 Objetivo do Desafio
+
+O desafio Pickle Rick do TryHackMe tem como finalidade simular um ambiente web vulnerável, no qual o atacante deve:
+
+    1- Enumerar serviços e diretórios expostos.
+
+    2- Identificar credenciais escondidas em ficheiros.
+
+    3- Obter acesso a um painel remoto com execução de comandos.
+
+    4- Explorar o sistema para recolher ficheiros com chaves secretas.
+
+    5- Escalar privilégios para utilizador root, demonstrando exploração de más configurações no sistema.
+
+Este tipo de desafio é altamente relevante em pentesting e auditorias de segurança, pois reproduz cenários comuns em ambientes reais.
+
+🔍 1. Enumeração Inicial
+    Inspeção do código-fonte
+
+    Na página inicial, ao verificar o View Page Source, encontrei uma nota com o seguinte conteúdo:
+
+    Note to self, remember username!
+    Username: R1ckRul3s
+
+
+➡️ Identificação de possível nome de utilizador válido.
+
+    Varredura de portas com Nmap
+    nmap -sV -p 80,443 10.10.173.79
+
+    Resultado:
+
+    80/tcp  open   http    Apache httpd 2.4.41 ((Ubuntu))
+    443/tcp closed https
+
+➡️ O serviço web estava ativo apenas em HTTP (porta 80).
+
+    Enumeração de diretórios com Gobuster
+    gobuster dir -u http://10.10.173.79/ -w /usr/share/dirb/wordlists/common.txt -x html,php,txt
+
+    Descobertas importantes:
+
+    /robots.txt → contém a string Wubbalubbadubdub (provável password).
+
+    /portal.php → redireciona para /login.php (sistema de autenticação).
+
+    /assets/ → diretório acessível mas sem ficheiros críticos.
+
+➡️ Nesta fase, obtive tanto username quanto password, fundamentais para acesso ao sistema.
+
+🔑 2. Acesso ao Portal
+
+    Username: R1ckRul3s
+
+    Password: Wubbalubbadubdub
+
+Com estas credenciais, foi possível aceder ao /portal.php, que fornecia um painel de execução remota de comandos (Command Panel).
+
+➡️ Esta funcionalidade é uma vulnerabilidade crítica, permitindo interação direta com o sistema.
+
+🛠️ 3. Exploração e Coleta de Chaves
+    Primeira Chave
+
+    Comandos executados:
+
+    ls
+    cat Sup3rS3cretPickl3Ingred.txt
+
+
+    Resultado:
+
+    Ingrediente 1 → mr. meeseek hair
+
+    Segunda Chave
+
+    Exploração do diretório /home/rick/:
+
+    ls -l /home/rick
+
+
+    Encontrado o ficheiro second ingredients.
+
+    O comando cat estava desativado, então utilizei tac:
+
+    tac /home/rick/second\ ingredients
+
+
+    Resultado:
+
+        Ingrediente 2 → 1 jerry tear
+
+➡️ Importante notar que a barra invertida () foi necessária para lidar com o espaço no nome do ficheiro.
+
+    Terceira Chave (Escalada de Privilégios)
+
+    Verificação de permissões sudo:
+
+    sudo -l
+
+
+    Saída:
+
+    O utilizador www-data podia executar qualquer comando como root sem senha.
+
+    ➡️ Esta é uma falha grave de configuração no /etc/sudoers, permitindo privilege escalation imediato.
+
+    Listando diretórios de root:
+
+    sudo ls -al /root/
+
+
+    Identificado o ficheiro 3rd.txt.
+
+    Leitura do conteúdo:
+
+    sudo tac /root/3rd.txt
+
+
+    Resultado:
+
+        Ingrediente 3 → fleeb juice
+
+📌 4. Conclusão
+
+    O desafio foi concluído com sucesso, demonstrando a aplicação prática das seguintes técnicas:
+
+    Enumeração Web: utilização de view-source, nmap e gobuster para descobrir utilizadores, passwords e ficheiros escondidos.
+
+    Exploitation: acesso ao painel de execução de comandos que permitiu interação direta com o sistema.
+
+    Privilege Escalation: exploração de má configuração no sudoers, obtendo acesso root sem necessidade de password.
+
+    Ingredientes finais encontrados:
+
+        mr. meeseek hair
+
+        1 jerry tear
+
+        fleeb juice
+
+🧩 Relevância
+
+    Este exercício reforçou competências essenciais em cibersegurança e pentesting:
+
+    Importância da enumeração sistemática em aplicações web.
+
+    Exploração prática de credenciais expostas e painéis vulneráveis.
+
+    Impacto de configurações incorretas em permissões de sudo, um erro ainda recorrente em sistemas reais.
